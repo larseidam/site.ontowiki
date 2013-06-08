@@ -52,13 +52,12 @@ class SiteHelper extends OntoWiki_Component_Helper
 
             $defaultController = $defaults['controller'];
             $defaultAction     = $defaults['action'];
-
+            /* TODO: this should not be the default site but the site which
+               matches the model of the selected resource */
+            $siteConfig = $this->getSiteConfig();
+            
             // are we currently following the empty route?
             if ($controller === $defaultController && $action === $defaultAction) {
-                /* TODO: this should not be the default site but the site which
-                   matches the model of the selected resource */
-                $siteConfig = $this->getSiteConfig();
-
                 if (isset($siteConfig['index'])) {
                     // TODO: detect accept header
                     $indexResource = $siteConfig['index'] . $this->getCurrentSuffix();
@@ -78,7 +77,7 @@ class SiteHelper extends OntoWiki_Component_Helper
                 '',
                 array(
                     'controller' => 'site',
-                    'action'     => $this->_privateConfig->defaultSite
+                    'action'     => $siteConfig['id']
                 )
             );
             $router->addRoute('empty', $emptyRoute);
@@ -125,7 +124,8 @@ class SiteHelper extends OntoWiki_Component_Helper
 
         if ($event->type === 'html') {
             $event->request->setControllerName('site');
-            $event->request->setActionName($this->_privateConfig->defaultSite);
+            $siteConfig = $this->getSiteConfig();
+            $event->request->setActionName($siteConfig['id']);
 
             if ($event->flag) {
                 $this->_currentSuffix = '.html';
@@ -163,9 +163,11 @@ class SiteHelper extends OntoWiki_Component_Helper
                         OntoWiki::getInstance()->selectedModel    = $siteModel;
                         OntoWiki::getInstance()->selectedResource = new OntoWiki_Resource($errorResource, $siteModel);
 
+                        $siteConfig = $this->getSiteConfig();
+                        
                         $request = Zend_Controller_Front::getInstance()->getRequest();
                         $request->setControllerName('site');
-                        $request->setActionName($this->_privateConfig->defaultSite);
+                        $request->setActionName($siteConfig['id']);
 
                         $response = Zend_Controller_Front::getInstance()->getResponse();
                         $response->setRawHeader('HTTP/1.0 404 Not Found');
@@ -237,20 +239,36 @@ class SiteHelper extends OntoWiki_Component_Helper
     public function getSiteConfig()
     {
         if (null === $this->_siteConfig) {
-            $this->_siteConfig = array();
-            $site = $this->_privateConfig->defaultSite;
-
-            $relativeTemplatePath = OntoWiki::getInstance()->extensionManager->getExtensionConfig('site')->templates;
-            // load the site config
-            $configFilePath = sprintf('%s/%s/%s/%s', $this->getComponentRoot(), $relativeTemplatePath, $site, self::SITE_CONFIG_FILENAME);
-            if (is_readable($configFilePath)) {
-                if ($config = parse_ini_file($configFilePath, true)) {
-                    $this->_siteConfig = $config;
+            
+            $siteConfigs = array();
+            
+            $request = Zend_Controller_Front::getInstance()->getRequest();
+            $requestHost = $request->getHttpHost();
+            
+            foreach ($this->_privateConfig->sites as $site)
+            {
+                $relativeTemplatePath = OntoWiki::getInstance()->extensionManager->getExtensionConfig('site')->templates;
+                // load the site config
+                $configFilePath = sprintf('%s/%s/%s/%s', $this->getComponentRoot(), $relativeTemplatePath, $site, self::SITE_CONFIG_FILENAME);
+                if (is_readable($configFilePath)) {
+                    if ($config = parse_ini_file($configFilePath, true)) {
+                        // add the site id to the config in order to allow correct URIs
+                        $config['id'] = $site;
+                        $siteConfigs[$site] = $config;
+                        if (false !== stripos($config['model'], $requestHost)) {
+                            $this->_siteConfig = $config;
+                            break;
+                        }
+                    }
+                    
                 }
             }
+        
+            // if host is not found insite configs use default site
+            if (null === $this->_siteConfig) {
+                $this->_siteConfig = $siteConfigs[$this->_privateConfig->defaultSite];
+            }
 
-            // add the site id to the config in order to allow correct URIs
-            $this->_siteConfig['id'] = $site;
         }
 
         return $this->_siteConfig;

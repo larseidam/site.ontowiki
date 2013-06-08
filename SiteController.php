@@ -76,9 +76,11 @@ class SiteController extends OntoWiki_Controller_Component
             $defaultAction = $defaults['action'];
         }
 
+        $siteConfig = $this->_getSiteConfig();
+        
         if (empty($action) || (isset($defaultAction) && $action === $defaultAction) || $action === 'index') {
             // use default site for empty or default action (index)
-            $this->_site = $this->_privateConfig->defaultSite;
+            $this->_site = $siteConfig['id'];
         } else {
             // use action as site otherwise
             $this->_site  = $action;
@@ -114,7 +116,7 @@ class SiteController extends OntoWiki_Controller_Component
             $moduleTemplatePath = $this->_componentRoot
                                 . $this->_relativeTemplatePath
                                 . DIRECTORY_SEPARATOR
-                                . $this->_privateConfig->defaultSite
+                                . $siteConfig['id']
                                 . DIRECTORY_SEPARATOR
                                 . 'modules';
 
@@ -200,7 +202,7 @@ class SiteController extends OntoWiki_Controller_Component
         if ((!isset($this->_request->m)) && (!$this->_owApp->selectedModel)) {
             // TODO: what if no site model configured?
             if (!Erfurt_Uri::check($siteConfig['model'])) {
-                $site = $this->_privateConfig->defaultSite;
+                $site = $siteConfig['id'];
                 $root = $this->getComponentHelper()->getComponentRoot();
                 $configFilePath = sprintf('%s%s/%s/%s', $root, $this->_relativeTemplatePath, $site, SiteHelper::SITE_CONFIG_FILENAME);
                 throw new OntoWiki_Exception(
